@@ -1426,13 +1426,20 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 		} else {
 			defer func() {
 				if errs[i] == nil && infos[i].DataDir != "" {
-					var wg sync.WaitGroup
-					wg.Add(len(infos[i].Parts))
+					// deduplicate erasure sets to remove object from.
+					sets := make(map[*erasureObjects]struct{})
+
 					for _, part := range infos[i].Parts {
-						go func(part ObjectPartInfo) {
+						sets[er.setByIdx(part.Placement.setIdx())] = struct{}{}
+					}
+					var wg sync.WaitGroup
+					wg.Add(len(sets))
+					for set := range sets {
+						set := set
+						go func() {
 							defer wg.Done()
-							er.setByIdx(part.Placement.setIdx()).deleteAll(ctx, bucket, pathJoin(vr.Name, infos[i].DataDir))
-						}(part)
+							set.deleteAll(ctx, bucket, pathJoin(vr.Name, infos[i].DataDir))
+						}()
 					}
 					wg.Wait()
 				}
@@ -1695,13 +1702,21 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 			if goi.DataDir == "" {
 				return
 			}
-			var wg sync.WaitGroup
-			wg.Add(len(goi.Parts))
+			// deduplicate erasure sets to remove object from.
+			sets := make(map[*erasureObjects]struct{})
+
 			for _, part := range goi.Parts {
-				go func(part ObjectPartInfo) {
+				sets[er.setByIdx(part.Placement.setIdx())] = struct{}{}
+			}
+
+			var wg sync.WaitGroup
+			wg.Add(len(sets))
+			for set := range sets {
+				set := set
+				go func() {
 					defer wg.Done()
-					er.setByIdx(part.Placement.setIdx()).deleteAll(ctx, bucket, pathJoin(object, goi.DataDir))
-				}(part)
+					set.deleteAll(ctx, bucket, pathJoin(object, goi.DataDir))
+				}()
 			}
 			wg.Wait()
 		}()

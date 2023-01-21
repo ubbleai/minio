@@ -1228,22 +1228,28 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		}
 	}
 
-	// Always perform 1/10th of the number of parts per CompleteMultipart
-	concurrent := len(fi.Parts) / 10
-	if concurrent <= 10 {
-		// if we cannot get 1/10th then choose the number of
-		// objects as concurrent.
-		concurrent = len(fi.Parts)
+	// deduplicate erasure sets to remove object from.
+	sets := make(map[*erasureObjects][]int)
+	for _, part := range fi.Parts {
+		if _, ok := sets[er.setByIdx(part.Placement.setIdx())]; !ok {
+			sets[er.setByIdx(part.Placement.setIdx())] = []int{part.Number}
+		} else {
+			sets[er.setByIdx(part.Placement.setIdx())] = append(sets[er.setByIdx(part.Placement.setIdx())], part.Number)
+		}
 	}
 
-	eg := errgroup.WithNErrs(len(fi.Parts)).WithConcurrency(concurrent)
-	for j, part := range fi.Parts {
-		j := j
-		part := part
+	eg := errgroup.WithNErrs(len(sets)).WithConcurrency(len(sets))
+	j := 0
+	for set, parts := range sets {
+		set := set
+		parts := parts
 		eg.Go(func() error {
-			er.setByIdx(part.Placement.setIdx()).renamePart(ctx, bucket, object, uploadID, fi.DataDir, part.Number)
+			for _, partN := range parts {
+				set.renamePart(ctx, bucket, object, uploadID, fi.DataDir, partN)
+			}
 			return nil
 		}, j)
+		j++
 	}
 
 	eg.Wait() // wait here..
@@ -1259,7 +1265,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		for _, part := range fi.Parts {
 			sets[er.setByIdx(part.Placement.setIdx())] = struct{}{}
 		}
-		eg := errgroup.WithNErrs(len(sets)).WithConcurrency(concurrent)
+		eg := errgroup.WithNErrs(len(sets)).WithConcurrency(len(sets))
 		i := 0
 		for set := range sets {
 			set := set
