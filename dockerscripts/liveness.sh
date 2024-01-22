@@ -7,9 +7,6 @@ if [ "$reply" != 200 ]; then
   exit 1;
 fi
 
-mc alias set local http://localhost:9000/ $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
-
-reply=$(mc ls local --debug 2>&1)
-if [[ ! "$reply" =~ "HTTP/1.1 200 OK" ]]; then
-  exit 1;
-fi
+AWS_ACCESS_KEY_ID=$MINIO_ROOT_USER
+AWS_SECRET_ACCESS_KEY=$MINIO_ROOT_PASSWORD
+aws s3api list-buckets --endpoint http://localhost:9000 > /dev/null

@@ -14,7 +14,7 @@ clusterDomain: cluster.local
 ##
 image:
   repository: registry.services.ubble.ai/public/minio
-  tag: RELEASE.2022-10-24T18-35-07Z-ubble-v1.0.5
+  tag: RELEASE.2022-10-24T18-35-07Z-ubble-v1.0.6
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
