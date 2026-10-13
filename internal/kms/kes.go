@@ -284,9 +284,16 @@ func (c *kesClient) DecryptAll(ctx context.Context, keyID string, ciphertexts []
 		return plaintexts, nil
 	}
 
+	// Call the KES client directly: c.DecryptKey would take the read lock a
+	// second time, and that deadlocks once the certificate reload is waiting
+	// for the write lock.
 	plaintexts := make([][]byte, 0, len(ciphertexts))
 	for i := range ciphertexts {
-		plaintext, err := c.DecryptKey(keyID, ciphertexts[i], contexts[i])
+		ctxBytes, err := contexts[i].MarshalText()
+		if err != nil {
+			return nil, err
+		}
+		plaintext, err := c.client.Decrypt(context.Background(), keyID, ciphertexts[i], ctxBytes)
 		if err != nil {
 			return nil, err
 		}
